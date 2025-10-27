@@ -16,7 +16,7 @@ setup(
     description="A utility to rename files based on dates in their filenames",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/brian1/date-renamer",
+    url="https://github.com/brianwilfredcraig/date-renamer",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

@@ -2,6 +2,9 @@
 
 A Python utility that renames files based on dates found in their filenames. It standardizes the date format to YYYYMMDD_ prefix while preserving the rest of the filename.
 
+[![GitHub](https://img.shields.io/github/license/brian1/date-renamer)](https://github.com/brian1/date-renamer/blob/main/LICENSE)
+[![Python](https://img.shields.io/pypi/pyversions/date-renamer)](https://pypi.org/project/date-renamer/)
+
 ## Features
 
 - Detects dates in multiple formats within filenames

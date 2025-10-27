@@ -1,0 +1,11 @@
+README.md
+setup.py
+src/date_renamer/__init__.py
+src/date_renamer/cli.py
+src/date_renamer/renamer.py
+src/date_renamer.egg-info/PKG-INFO
+src/date_renamer.egg-info/SOURCES.txt
+src/date_renamer.egg-info/dependency_links.txt
+src/date_renamer.egg-info/entry_points.txt
+src/date_renamer.egg-info/top_level.txt
+tests/test_renamer.py

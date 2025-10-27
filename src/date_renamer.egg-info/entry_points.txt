@@ -1,0 +1,2 @@
+[console_scripts]
+date-renamer = date_renamer.cli:main

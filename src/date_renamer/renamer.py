@@ -1,0 +1,127 @@
+"""Core functionality for renaming files based on dates in their filenames."""
+
+import re
+from datetime import datetime
+from pathlib import Path
+
+class DateFileRenamer:
+    def __init__(self):
+        # Dictionary of regex patterns and their corresponding datetime format strings
+        month_names = r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
+        self.date_patterns = {
+            # YYYY-MM-DD or YYYY_MM_DD
+            r'(\d{4})[-_](\d{2})[-_](\d{2})': '%Y%m%d',
+            # DD-MM-YYYY or DD_MM_YYYY
+            r'(\d{2})[-_](\d{2})[-_](\d{4})': '%Y%m%d',
+            # MMDDYYYY
+            r'(?<!\d)(\d{2})(\d{2})(\d{4})(?!\d)': '%Y%m%d',  # Match 8 digits not surrounded by digits
+            # DD(Mon)YY or DD-(Mon)-YY
+            rf'(\d{{1,2}})[-_]?({month_names})[-_]?(\d{{2}})(?!\d)': '%Y%m%d',
+            # (Mon)DD,YY or (Mon)_DD_YY
+            rf'({month_names})[-_]?(\d{{1,2}})[-,_]?(\d{{2}})(?!\d)': '%Y%m%d',
+        }
+        self.month_map = {
+            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+            'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+            'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+        }
+        self.renamed_files = []
+        self.skipped_files = []
+
+    def extract_date(self, filename):
+        """Extract date from filename using various patterns."""
+        for pattern in self.date_patterns.keys():
+            # Add separators to help with boundary matching
+            search_text = f" {filename} "
+            match = re.search(pattern, search_text, re.IGNORECASE)
+            if match:
+                try:
+                    groups = match.groups()
+                    if len(groups) == 3:
+                        # Check for text month format (either DD-Mon-YY or Mon-DD-YY)
+                        if any(month.upper() in groups[1].upper() for month in self.month_map.keys()):
+                            # DD-Mon-YY format
+                            month = self.month_map[groups[1].capitalize()]
+                            day = groups[0].zfill(2) if len(groups[0]) == 1 else groups[0]
+                            year = f"20{groups[2]}" if len(groups[2]) == 2 else groups[2]
+                        elif any(month.upper() in groups[0].upper() for month in self.month_map.keys()):
+                            # Mon-DD-YY format
+                            month = self.month_map[groups[0].capitalize()]
+                            day = groups[1].zfill(2) if len(groups[1]) == 1 else groups[1]
+                            year = f"20{groups[2]}" if len(groups[2]) == 2 else groups[2]
+                        elif len(groups[2]) == 4:  # DD-MM-YYYY format
+                            day, month, year = groups
+                        elif len(groups[0]) == 4:  # YYYY-MM-DD format
+                            year, month, day = groups
+                        else:  # MMDDYYYY format
+                            month, day, year = groups
+
+                        # Create standardized date string
+                        date_str = f"{year}{month.zfill(2)}{day.zfill(2)}"
+                        # Validate the date
+                        datetime.strptime(date_str, '%Y%m%d')
+                        return date_str, match.group().strip()
+                except ValueError:
+                    continue
+        return None, None
+
+    def rename_file(self, filepath):
+        """Rename a file based on the date found in its name."""
+        path = Path(filepath)
+        if not path.is_file():
+            return
+
+        filename = path.name
+        date_str, matched_date = self.extract_date(filename)
+        
+        if not date_str:
+            self.skipped_files.append(filename)
+            return
+
+        # Remove the matched date from the original filename
+        new_name = filename.replace(matched_date, '').strip('_-')
+        # Clean up multiple separators that might remain and remove any leading/trailing underscores
+        new_name = re.sub(r'[-_]+', '_', new_name).strip('_')
+        # Create the new filename with YYYYMMDD prefix
+        new_filename = f"{date_str}_{new_name}"
+        new_filepath = path.parent / new_filename
+
+        try:
+            path.rename(new_filepath)
+            self.renamed_files.append((filename, new_filename))
+        except OSError as e:
+            print(f"Error renaming {filename}: {e}")
+
+    def process_directory(self, directory, recursive=False):
+        """Process all files in the given directory."""
+        directory = Path(directory)
+        print(f"Processing directory: {directory}")
+        
+        if recursive:
+            files = [f for f in directory.rglob('*') if f.is_file()]
+        else:
+            files = [f for f in directory.iterdir() if f.is_file()]
+        
+        print(f"Found files: {[f.name for f in files]}")
+        
+        for file_path in files:
+            print(f"Processing file: {file_path}")
+            self.rename_file(file_path)
+            print(f"Renamed files so far: {self.renamed_files}")
+            print(f"Skipped files so far: {self.skipped_files}")
+
+    def print_summary(self):
+        """Print a summary of the renaming operation."""
+        print("\nRenaming Summary:")
+        print("-" * 50)
+        if self.renamed_files:
+            print("\nSuccessfully renamed files:")
+            for old_name, new_name in self.renamed_files:
+                print(f"  {old_name} → {new_name}")
+            print(f"\nTotal files renamed: {len(self.renamed_files)}")
+        
+        if self.skipped_files:
+            print("\nSkipped files (no valid date found):")
+            for filename in self.skipped_files:
+                print(f"  {filename}")
+            print(f"\nTotal files skipped: {len(self.skipped_files)}")

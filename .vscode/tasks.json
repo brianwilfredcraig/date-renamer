@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Install Package",
+            "type": "shell",
+            "command": "pip install -e .",
+            "problemMatcher": []
+        },
+        {
+            "label": "Install Dev Dependencies",
+            "type": "shell",
+            "command": "pip install -e '.[dev]'",
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Tests",
+            "type": "shell",
+            "command": "pytest",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Demo",
+            "type": "shell",
+            "command": "python examples/demo.py",
+            "problemMatcher": []
+        }
+    ]
+}

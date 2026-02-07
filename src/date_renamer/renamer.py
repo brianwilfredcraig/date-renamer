@@ -1,11 +1,17 @@
 """Core functionality for renaming files based on dates in their filenames."""
 
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 class DateFileRenamer:
-    def __init__(self):
+    def __init__(self, backup_dir=True):
+        # backup_dir: True for default backup behavior, False to disable, or a Path for custom location
+        self.backup_enabled = backup_dir is not False
+        self.backup_dir = backup_dir if isinstance(backup_dir, Path) else None
+        self.backup_location = None  # Set when processing starts
+        
         # Dictionary of regex patterns and their corresponding datetime format strings
         month_names = r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
         self.date_patterns = {
@@ -36,6 +42,7 @@ class DateFileRenamer:
         }
         self.renamed_files = []
         self.skipped_files = []
+        self.backup_files = []  # Track files that were backed up
 
     def extract_datetime(self, filename):
         """Extract datetime from filename using datetime patterns.
@@ -183,6 +190,13 @@ class DateFileRenamer:
         new_filepath = path.parent / new_filename
 
         try:
+            # Create backup if enabled
+            if self.backup_enabled and self.backup_location:
+                backup_path = self.backup_location / filename
+                shutil.copy2(path, backup_path)
+                self.backup_files.append(filename)
+            
+            # Rename the file
             path.rename(new_filepath)
             self.renamed_files.append((filename, new_filename))
         except OSError as e:
@@ -192,6 +206,17 @@ class DateFileRenamer:
         """Process all files in the given directory."""
         directory = Path(directory)
         print(f"Processing directory: {directory}")
+        
+        # Create backup directory if backups are enabled
+        if self.backup_enabled:
+            if self.backup_dir:
+                self.backup_location = self.backup_dir
+            else:
+                # Default: create .backup subfolder in the target directory
+                self.backup_location = directory / ".backup"
+            
+            self.backup_location.mkdir(parents=True, exist_ok=True)
+            print(f"Backup location: {self.backup_location}")
         
         if recursive:
             files = [f for f in directory.rglob('*') if f.is_file()]
@@ -210,6 +235,11 @@ class DateFileRenamer:
         """Print a summary of the renaming operation."""
         print("\nRenaming Summary:")
         print("-" * 50)
+        
+        if self.backup_enabled and self.backup_location:
+            print(f"\nBackup location: {self.backup_location}")
+            print(f"Files backed up: {len(self.backup_files)}")
+        
         if self.renamed_files:
             print("\nSuccessfully renamed files:")
             for old_name, new_name in self.renamed_files:

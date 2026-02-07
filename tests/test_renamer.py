@@ -60,11 +60,11 @@ def test_no_date(renamer):
 
 def test_process_directory(renamer, temp_directory):
     """Test processing a directory with multiple files."""
-    initial_files = set(f.name for f in temp_directory.iterdir())
+    initial_files = set(f.name for f in temp_directory.iterdir() if f.is_file())
     renamer.process_directory(temp_directory)
-    final_files = set(f.name for f in temp_directory.iterdir())
+    final_files = set(f.name for f in temp_directory.iterdir() if f.is_file())
     
-    # Verify total file count remains same
+    # Verify total file count remains same (backup directory is created, not counted as file)
     assert len(initial_files) == len(final_files)
 
     # Check that files with dates were renamed
@@ -73,6 +73,9 @@ def test_process_directory(renamer, temp_directory):
 
     # Check that files without dates were not renamed
     assert (temp_directory / "no_date_file.txt").exists()
+    
+    # Check that backup directory was created
+    assert (temp_directory / ".backup").exists()
 
     # Check summary counts
     assert len(renamer.renamed_files) == 5  # All files with dates
@@ -139,3 +142,42 @@ def test_rename_file_with_datetime_and_prefix(renamer, tmp_path):
     assert expected_file.exists()
     assert not test_file.exists()
     assert len(renamer.renamed_files) == 1
+
+
+def test_backup_enabled_by_default(tmp_path):
+    """Test that backups are created by default."""
+    # Create test file
+    test_file = tmp_path / "report_2024-03-15.pdf"
+    test_file.write_text("test content")
+    
+    # Process with default backup enabled
+    renamer = DateFileRenamer()
+    renamer.process_directory(tmp_path)
+    
+    # Check that backup directory was created
+    backup_dir = tmp_path / ".backup"
+    assert backup_dir.exists()
+    assert (backup_dir / "report_2024-03-15.pdf").exists()
+    
+    # Check that original file was renamed
+    assert (tmp_path / "20240315_report.pdf").exists()
+    assert not test_file.exists()
+
+
+def test_backup_can_be_disabled(tmp_path):
+    """Test that backups can be disabled with backup_dir=False."""
+    # Create test file
+    test_file = tmp_path / "invoice_12-03-2024.pdf"
+    test_file.write_text("test content")
+    
+    # Process with backups disabled
+    renamer = DateFileRenamer(backup_dir=False)
+    renamer.process_directory(tmp_path)
+    
+    # Check that backup directory was NOT created
+    backup_dir = tmp_path / ".backup"
+    assert not backup_dir.exists()
+    
+    # Check that original file was renamed
+    assert (tmp_path / "20240312_invoice.pdf").exists()
+    assert not test_file.exists()

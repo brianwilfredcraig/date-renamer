@@ -21,10 +21,16 @@ def main():
         action="store_true",
         help="Process subdirectories recursively"
     )
+    parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Disable backup creation (backups enabled by default)"
+    )
     args = parser.parse_args()
 
     try:
-        renamer = DateFileRenamer()
+        # Create renamer with backup enabled by default (disabled with --no-backup flag)
+        renamer = DateFileRenamer(backup_dir=not args.no_backup)
         renamer.process_directory(args.directory, args.recursive)
         renamer.print_summary()
     except Exception as e:

@@ -20,6 +20,13 @@ class DateFileRenamer:
             # (Mon)DD,YY or (Mon)_DD_YY
             rf'({month_names})[-_]?(\d{{1,2}})[-,_]?(\d{{2}})(?!\d)': '%Y%m%d',
         }
+        
+        # Datetime patterns (checked before date-only patterns)
+        self.datetime_patterns = {
+            # YYYYMMDD_HHMMSSMMM or YYYYMMDD_HHMMSS (e.g., PXL_20260204_181153683)
+            r'(\d{4})(\d{2})(\d{2})[-_](\d{2})(\d{2})(\d{2})(\d{3})?': 'datetime_yyyymmdd_hhmmss',
+        }
+        
         self.month_map = {
             'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
             'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
@@ -27,6 +34,42 @@ class DateFileRenamer:
         }
         self.renamed_files = []
         self.skipped_files = []
+
+    def extract_datetime(self, filename):
+        """Extract datetime from filename using datetime patterns.
+        
+        Returns:
+            tuple: (datetime_str, matched_str, has_time) where:
+                - datetime_str: ISO 8601 format (e.g., '20260204T181153')
+                - matched_str: The original matched portion of the filename
+                - has_time: Boolean indicating if time was found
+        """
+        for pattern in self.datetime_patterns.keys():
+            search_text = f" {filename} "
+            match = re.search(pattern, search_text, re.IGNORECASE)
+            if match:
+                try:
+                    groups = match.groups()
+                    if len(groups) >= 6:
+                        year, month, day, hour, minute, second = groups[:6]
+                        milliseconds = groups[6] if len(groups) > 6 and groups[6] else None
+                        
+                        # Validate datetime
+                        date_str = f"{year}{month}{day}"
+                        time_str = f"{hour}{minute}{second}"
+                        full_datetime_str = f"{date_str}{time_str}"
+                        datetime.strptime(full_datetime_str, '%Y%m%d%H%M%S')
+                        
+                        # Format as ISO 8601: YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSS.mmm
+                        iso_str = f"{year}{month}{day}T{hour}{minute}{second}"
+                        if milliseconds:
+                            iso_str += f".{milliseconds}"
+                        
+                        return iso_str, match.group().strip(), True
+                except ValueError:
+                    continue
+        
+        return None, None, False
 
     def extract_date(self, filename):
         """Extract date from filename using various patterns."""
@@ -77,13 +120,23 @@ class DateFileRenamer:
         return None, None
 
     def rename_file(self, filepath):
-        """Rename a file based on the date found in its name."""
+        """Rename a file based on the date or datetime found in its name."""
         path = Path(filepath)
         if not path.is_file():
             return
 
         filename = path.name
-        date_str, matched_date = self.extract_date(filename)
+        
+        # Try to extract datetime first (which includes time)
+        datetime_str, matched_datetime, has_time = self.extract_datetime(filename)
+        
+        if datetime_str:
+            # Datetime format found - use ISO 8601 format
+            date_str = datetime_str
+            matched_str = matched_datetime
+        else:
+            # Fall back to date-only extraction
+            date_str, matched_str = self.extract_date(filename)
         
         if not date_str:
             self.skipped_files.append(filename)
@@ -93,14 +146,32 @@ class DateFileRenamer:
         name_without_ext = filename.rsplit('.', 1)[0]
         ext = filename.split('.')[-1]
         
-        # Remove the matched date and surrounding separators
-        pattern = f'[-_]?{re.escape(matched_date)}[-_]?'
-        name_without_date = re.sub(pattern, '_', name_without_ext)
+        # Remove the matched date/datetime from the name
+        # Try a series of replacement strategies, from most specific to least
+        name_without_date = name_without_ext
+        
+        # Strategy 1: Remove with separator on both sides
+        pattern_with_separators = f'[-_]{re.escape(matched_str)}[-_]'
+        name_without_date = re.sub(pattern_with_separators, '_', name_without_date)
+        
+        # Strategy 2: Remove with separator on left only (replace with nothing)
+        if name_without_date == name_without_ext:
+            pattern_leading_sep = f'[-_]{re.escape(matched_str)}'
+            name_without_date = re.sub(pattern_leading_sep, '', name_without_ext)
+        
+        # Strategy 3: Remove with separator on right only (replace with nothing)
+        if name_without_date == name_without_ext:
+            pattern_trailing_sep = f'{re.escape(matched_str)}[-_]'
+            name_without_date = re.sub(pattern_trailing_sep, '', name_without_ext)
+        
+        # Strategy 4: Direct string replacement (handles dots and other cases)
+        if name_without_date == name_without_ext:
+            name_without_date = name_without_ext.replace(matched_str, '')
         
         # Clean up multiple separators and remove leading/trailing underscores
         name_without_date = re.sub(r'[-_]+', '_', name_without_date).strip('_')
         
-        # Create the new filename with YYYYMMDD prefix and original extension
+        # Create the new filename with datetime/date prefix and original extension
         new_filename = f"{date_str}_{name_without_date}.{ext}"
         new_filepath = path.parent / new_filename
 

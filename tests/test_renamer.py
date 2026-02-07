@@ -83,3 +83,57 @@ def test_multiple_dates(renamer):
     # Should use the first valid date found
     assert date_str == "20240115"
     assert matched_date == "2024-01-15"
+
+
+@pytest.mark.parametrize("input_file,expected_datetime,expected_match", [
+    ("PXL_20260204_181153683.MP.jpg", "20260204T181153.683", "20260204_181153683"),
+    ("photo_20240315_120530.jpg", "20240315T120530", "20240315_120530"),
+    ("original_066327a2-b97c-416a-b6db-b6296a669edf_PXL_20260204_181153683.MP.jpg", 
+     "20260204T181153.683", "20260204_181153683"),
+])
+def test_extract_datetime_formats(renamer, input_file, expected_datetime, expected_match):
+    """Test extracting datetime in various formats."""
+    datetime_str, matched_str, has_time = renamer.extract_datetime(input_file)
+    assert datetime_str == expected_datetime
+    assert matched_str == expected_match
+    assert has_time is True
+
+
+def test_no_datetime(renamer):
+    """Test handling files without datetime."""
+    filename = "report_2023-12-25.txt"  # Only has date, not datetime
+    datetime_str, matched_str, has_time = renamer.extract_datetime(filename)
+    assert datetime_str is None
+    assert has_time is False
+
+
+def test_rename_file_with_datetime(renamer, tmp_path):
+    """Test renaming a file with datetime in the filename."""
+    # Create test file
+    test_file = tmp_path / "PXL_20260204_181153683.MP.jpg"
+    test_file.write_text("test content")
+    
+    # Rename it
+    renamer.rename_file(test_file)
+    
+    # Check that file was renamed correctly
+    expected_file = tmp_path / "20260204T181153.683_PXL.MP.jpg"
+    assert expected_file.exists()
+    assert not test_file.exists()
+    assert len(renamer.renamed_files) == 1
+
+
+def test_rename_file_with_datetime_and_prefix(renamer, tmp_path):
+    """Test renaming a file with datetime and UUID prefix."""
+    # Create test file
+    test_file = tmp_path / "original_066327a2-b97c-416a-b6db-b6296a669edf_PXL_20260204_181153683.MP.jpg"
+    test_file.write_text("test content")
+    
+    # Rename it
+    renamer.rename_file(test_file)
+    
+    # Check that file was renamed correctly (hyphens in UUID are converted to underscores by cleanup)
+    expected_file = tmp_path / "20260204T181153.683_original_066327a2_b97c_416a_b6db_b6296a669edf_PXL.MP.jpg"
+    assert expected_file.exists()
+    assert not test_file.exists()
+    assert len(renamer.renamed_files) == 1

@@ -35,6 +35,8 @@ def temp_directory(tmp_path: Path) -> Path:
     ("data_2023-12-25_raw.csv", "20231225", "2023-12-25"),
     ("report_Mar_8_21.txt", "20210308", "Mar_8_21"),
     ("report_03152024.txt", "20240315", "03152024"),
+    ("IMG-20260204-WA0002.jpeg", "20260204", "20260204"),  # YYYYMMDD format (WhatsApp)
+    ("photo_20250815_archived.jpg", "20250815", "20250815"),  # YYYYMMDD format
 ])
 def test_extract_date_formats(renamer, input_file, expected_date, expected_match):
     """Test extracting dates in various formats."""

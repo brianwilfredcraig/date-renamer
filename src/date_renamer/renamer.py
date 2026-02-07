@@ -13,6 +13,8 @@ class DateFileRenamer:
             r'(\d{4})[-_](\d{2})[-_](\d{2})': '%Y%m%d',
             # DD-MM-YYYY or DD_MM_YYYY
             r'(\d{2})[-_](\d{2})[-_](\d{4})': '%Y%m%d',
+            # YYYYMMDD (8 consecutive digits, no separators - WhatsApp style)
+            r'(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)': '%Y%m%d',  # Must come before MMDDYYYY
             # MMDDYYYY
             r'(?<!\d)(\d{2})(\d{2})(\d{4})(?!\d)': '%Y%m%d',  # Match 8 digits not surrounded by digits
             # DD(Mon)YY or DD-(Mon)-YY
@@ -102,13 +104,18 @@ class DateFileRenamer:
                                 # DD-MM-YYYY format
                                 day, month, year = groups
                         else:
-                            # MMDDYYYY format - no separators, 8 consecutive digits
-                            # Check if first two digits are valid month (01-12)
-                            first_two = int(groups[0])
-                            if 1 <= first_two <= 12:
-                                month, day, year = groups
+                            # No separators - need to determine YYYYMMDD vs MMDDYYYY
+                            # Check the length of the first group to disambiguate
+                            if len(groups[0]) == 4:
+                                # YYYYMMDD format - first group is 4-digit year
+                                year, month, day = groups
                             else:
-                                day, month, year = groups
+                                # MMDDYYYY format - check if first two digits are valid month (01-12)
+                                first_two = int(groups[0])
+                                if 1 <= first_two <= 12:
+                                    month, day, year = groups
+                                else:
+                                    day, month, year = groups
 
                         # Create standardized date string
                         date_str = f"{year}{month.zfill(2)}{day.zfill(2)}"

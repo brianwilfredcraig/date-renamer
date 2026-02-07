@@ -22,4 +22,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    extras_require={
+        "dev": ["pytest>=8.0.0", "pytest-cov>=4.0.0"],
+    },
 )

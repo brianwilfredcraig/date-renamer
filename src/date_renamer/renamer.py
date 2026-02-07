@@ -37,6 +37,7 @@ class DateFileRenamer:
             if match:
                 try:
                     groups = match.groups()
+                    matched_str = match.group()
                     if len(groups) == 3:
                         # Check for text month format (either DD-Mon-YY or Mon-DD-YY)
                         if any(month.upper() in groups[1].upper() for month in self.month_map.keys()):
@@ -49,12 +50,22 @@ class DateFileRenamer:
                             month = self.month_map[groups[0].capitalize()]
                             day = groups[1].zfill(2) if len(groups[1]) == 1 else groups[1]
                             year = f"20{groups[2]}" if len(groups[2]) == 2 else groups[2]
-                        elif len(groups[2]) == 4:  # DD-MM-YYYY format
-                            day, month, year = groups
-                        elif len(groups[0]) == 4:  # YYYY-MM-DD format
-                            year, month, day = groups
-                        else:  # MMDDYYYY format
-                            month, day, year = groups
+                        elif '-' in matched_str or '_' in matched_str:
+                            # Separator-based patterns (DD-MM-YYYY or YYYY-MM-DD)
+                            if len(groups[0]) == 4:
+                                # YYYY-MM-DD format
+                                year, month, day = groups
+                            else:
+                                # DD-MM-YYYY format
+                                day, month, year = groups
+                        else:
+                            # MMDDYYYY format - no separators, 8 consecutive digits
+                            # Check if first two digits are valid month (01-12)
+                            first_two = int(groups[0])
+                            if 1 <= first_two <= 12:
+                                month, day, year = groups
+                            else:
+                                day, month, year = groups
 
                         # Create standardized date string
                         date_str = f"{year}{month.zfill(2)}{day.zfill(2)}"
@@ -78,12 +89,19 @@ class DateFileRenamer:
             self.skipped_files.append(filename)
             return
 
-        # Remove the matched date from the original filename
-        new_name = filename.replace(matched_date, '').strip('_-')
-        # Clean up multiple separators that might remain and remove any leading/trailing underscores
-        new_name = re.sub(r'[-_]+', '_', new_name).strip('_')
-        # Create the new filename with YYYYMMDD prefix
-        new_filename = f"{date_str}_{new_name}"
+        # Split filename and extension
+        name_without_ext = filename.rsplit('.', 1)[0]
+        ext = filename.split('.')[-1]
+        
+        # Remove the matched date and surrounding separators
+        pattern = f'[-_]?{re.escape(matched_date)}[-_]?'
+        name_without_date = re.sub(pattern, '_', name_without_ext)
+        
+        # Clean up multiple separators and remove leading/trailing underscores
+        name_without_date = re.sub(r'[-_]+', '_', name_without_date).strip('_')
+        
+        # Create the new filename with YYYYMMDD prefix and original extension
+        new_filename = f"{date_str}_{name_without_date}.{ext}"
         new_filepath = path.parent / new_filename
 
         try:

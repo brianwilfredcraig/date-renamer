@@ -11,6 +11,7 @@ class DateFileRenamer:
         self.backup_enabled = backup_dir is not False
         self.backup_dir = backup_dir if isinstance(backup_dir, Path) else None
         self.backup_location = None  # Set when processing starts
+        self.source_directory = None
         
         # Dictionary of regex patterns and their corresponding datetime format strings
         month_names = r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
@@ -31,8 +32,8 @@ class DateFileRenamer:
         
         # Datetime patterns (checked before date-only patterns)
         self.datetime_patterns = {
-            # YYYYMMDD_HHMMSSMMM or YYYYMMDD_HHMMSS (e.g., PXL_20260204_181153683)
-            r'(\d{4})(\d{2})(\d{2})[-_](\d{2})(\d{2})(\d{2})(\d{3})?': 'datetime_yyyymmdd_hhmmss',
+            # YYYYMMDD_HHMMSSMMM, YYYYMMDD_HHMMSS, or ISO-style output
+            r'(\d{4})(\d{2})(\d{2})[-_T](\d{2})(\d{2})(\d{2})(?:[._]?(\d{3}))?': 'datetime_yyyymmdd_hhmmss',
         }
         
         self.month_map = {
@@ -189,10 +190,21 @@ class DateFileRenamer:
         new_filename = f"{date_str}_{name_without_date}.{ext}"
         new_filepath = path.parent / new_filename
 
+        if new_filepath == path:
+            return
+
         try:
             # Create backup if enabled
             if self.backup_enabled and self.backup_location:
-                backup_path = self.backup_location / filename
+                relative_path = (
+                    path.relative_to(self.source_directory)
+                    if self.source_directory
+                    else Path(filename)
+                )
+                backup_path = self.backup_location / relative_path
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+                if backup_path.exists():
+                    raise FileExistsError(f"Backup already exists: {backup_path}")
                 shutil.copy2(path, backup_path)
                 self.backup_files.append(filename)
             
@@ -205,6 +217,7 @@ class DateFileRenamer:
     def process_directory(self, directory, recursive=False):
         """Process all files in the given directory."""
         directory = Path(directory)
+        self.source_directory = directory
         print(f"Processing directory: {directory}")
         
         # Create backup directory if backups are enabled
@@ -222,7 +235,17 @@ class DateFileRenamer:
             files = [f for f in directory.rglob('*') if f.is_file()]
         else:
             files = [f for f in directory.iterdir() if f.is_file()]
-        
+
+        if self.backup_enabled and self.backup_location:
+            backup_root = self.backup_location.resolve()
+            files_to_process = []
+            for file_path in files:
+                try:
+                    file_path.resolve().relative_to(backup_root)
+                except ValueError:
+                    files_to_process.append(file_path)
+            files = files_to_process
+
         print(f"Found files: {[f.name for f in files]}")
         
         for file_path in files:

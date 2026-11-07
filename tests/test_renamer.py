@@ -4,6 +4,7 @@
 import pytest
 from pathlib import Path
 from datetime import datetime
+from date_renamer.cli import main
 from date_renamer.renamer import DateFileRenamer
 
 @pytest.fixture
@@ -181,3 +182,90 @@ def test_backup_can_be_disabled(tmp_path):
     # Check that original file was renamed
     assert (tmp_path / "20240312_invoice.pdf").exists()
     assert not test_file.exists()
+
+
+def test_recursive_processing_excludes_backup_and_preserves_subdirectories(tmp_path):
+    root_file = tmp_path / "root_2024-03-15.txt"
+    root_file.write_text("root content")
+    nested_dir = tmp_path / "nested"
+    nested_dir.mkdir()
+    nested_file = nested_dir / "nested_2024-03-16.txt"
+    nested_file.write_text("nested content")
+    backup_dir = tmp_path / ".backup"
+    backup_dir.mkdir()
+    previous_backup = backup_dir / "20200101_previous.txt"
+    previous_backup.write_text("previous backup")
+
+    renamer = DateFileRenamer()
+    renamer.process_directory(tmp_path, recursive=True)
+
+    assert (tmp_path / "20240315_root.txt").read_text() == "root content"
+    assert (nested_dir / "20240316_nested.txt").read_text() == "nested content"
+    assert (backup_dir / "root_2024-03-15.txt").read_text() == "root content"
+    assert (backup_dir / "nested" / "nested_2024-03-16.txt").read_text() == "nested content"
+    assert previous_backup.read_text() == "previous backup"
+    assert len(renamer.renamed_files) == 2
+    assert len(renamer.backup_files) == 2
+
+
+def test_rerunning_does_not_create_duplicate_backup(tmp_path):
+    original = tmp_path / "report_2024-03-15.pdf"
+    original.write_text("original content")
+    renamer = DateFileRenamer()
+
+    renamer.process_directory(tmp_path)
+    backup = tmp_path / ".backup" / original.name
+    renamer.process_directory(tmp_path)
+
+    assert backup.read_text() == "original content"
+    assert (tmp_path / "20240315_report.pdf").read_text() == "original content"
+    assert len(renamer.renamed_files) == 1
+    assert len(renamer.backup_files) == 1
+
+
+def test_rerunning_datetime_filename_does_not_rename_again(tmp_path):
+    source = tmp_path / "PXL_20260204_181153683.MP.jpg"
+    source.write_text("image content")
+    renamer = DateFileRenamer()
+
+    renamer.process_directory(tmp_path)
+    renamed_file = tmp_path / "20260204T181153.683_PXL.MP.jpg"
+    renamer.process_directory(tmp_path)
+
+    assert renamed_file.read_text() == "image content"
+    assert len(renamer.renamed_files) == 1
+    assert len(renamer.backup_files) == 1
+
+
+def test_backup_collision_does_not_overwrite_existing_backup(tmp_path, capsys):
+    original = tmp_path / "report_2024-03-15.pdf"
+    original.write_text("new content")
+    backup = tmp_path / ".backup" / original.name
+    backup.parent.mkdir()
+    backup.write_text("existing backup")
+
+    DateFileRenamer().process_directory(tmp_path)
+
+    assert original.read_text() == "new content"
+    assert backup.read_text() == "existing backup"
+    assert "Backup already exists" in capsys.readouterr().out
+
+
+def test_cli_creates_backups_by_default(tmp_path, monkeypatch):
+    source = tmp_path / "report_2024-03-15.pdf"
+    source.write_text("file content")
+    monkeypatch.setattr("sys.argv", ["date-renamer", str(tmp_path)])
+
+    assert main() == 0
+    assert (tmp_path / ".backup" / source.name).read_text() == "file content"
+    assert (tmp_path / "20240315_report.pdf").exists()
+
+
+def test_cli_can_disable_backups(tmp_path, monkeypatch):
+    source = tmp_path / "report_2024-03-15.pdf"
+    source.write_text("file content")
+    monkeypatch.setattr("sys.argv", ["date-renamer", str(tmp_path), "--no-backup"])
+
+    assert main() == 0
+    assert not (tmp_path / ".backup").exists()
+    assert (tmp_path / "20240315_report.pdf").exists()

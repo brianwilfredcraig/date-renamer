@@ -13,6 +13,7 @@ A Python utility that renames files based on dates found in their filenames. It 
 - Optional recursive directory processing
 - Detailed operation summary
 - Command-line interface
+- Creates a `.backup` directory by default before renaming files; backups can be disabled
 
 ## Installation
 
@@ -31,7 +32,14 @@ date-renamer /path/to/directory
 
 # Process directory and subdirectories recursively
 date-renamer /path/to/directory -r
+
+# Disable backup creation
+date-renamer /path/to/directory --no-backup
 ```
+
+Backups are stored under `.backup` in the target directory. Recursive runs preserve
+the source directory structure inside the backup directory and do not process
+existing backup files.
 
 ## Supported Date Formats
 
